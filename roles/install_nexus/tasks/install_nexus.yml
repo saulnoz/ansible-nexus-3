@@ -1,0 +1,83 @@
+---
+- name: handle docker_virtualisation
+  set_fact: docker={{ ansible_virtualization_type is defined and ansible_virtualization_type == 'docker' and ansible_virtualization_role == 'guest' }}
+
+- name: check for nexus dir
+  stat: path=/usr/local/{{ nexus_pkg }}
+  register: nexus_dir_exists
+
+#attention bug#234 la balise owner et group n'est pas prise en compte
+- name: dezziper  nexus
+  unarchive: src=/tmp/{{ nexus_pkg }}.tar.gz dest=/usr/local/ owner=nexus copy=no
+  become: yes
+  when: not nexus_dir_exists.stat.exists and not ansible_check_mode
+
+#suite au bug ci-dessous nous devons changer le owner du repertoire
+- name: changement du owner du repertoire
+  file: path=/usr/local/{{ nexus_pkg }} state=directory owner=nexus recurse=yes
+
+- name: linker le repertoire {{ nexus_pkg }} avec nexus
+  file: src=/usr/local/{{ nexus_pkg }}  path=/usr/local/nexus state=link force=yes owner=nexus
+  remote_user: nexus
+
+- name: creation nexus datadir
+  file: path={{ nexus_data_dir }} state=directory owner=nexus recurse=yes
+
+- name: conf nexus
+  lineinfile: dest=/usr/local/nexus/etc/nexus-default.properties regexp="{{ item.regexp }}" line="{{ item.line }}" state=present
+  with_items:
+       - { regexp: '^#?nexus-context-path=\/', line: 'nexus-context-path={{ nexus_url_prefix | default("/") }}' }
+  when: ( not ansible_check_mode )
+
+- name: conf nexus
+  lineinfile: dest=/usr/local/nexus/bin/nexus.vmoptions regexp="{{ item.regexp }}" line="{{ item.line }}" state=present
+  with_items:
+       - { regexp: '^#?-Djavax.net.ssl.trustStore=', line: '-Djavax.net.ssl.trustStore=/usr/local/nexus/cacerts' }
+       - { regexp: '^#?-Dkaraf.data=', line: '-Dkaraf.data={{ nexus_data_dir }}/data' }
+       - { regexp: '^#?-Djava.io.tmpdir=', line: '-Djava.io.tmpdir={{ nexus_data_dir }}/data/tmp' }
+       - { regexp: '^#?-Xms', line: '-Xms{{ nexus_vm_xms }}' }
+       - { regexp: '^#?-Xmx', line: '-Xmx{{ nexus_vm_xmx }}' }
+  when: ( not ansible_check_mode )
+
+- name: conf nexus increment idle_time
+  replace: dest=/usr/local/nexus/etc/jetty/jetty-http.xml regexp='(.*<Set name="idleTimeout"><Property name="jetty.http.timeout" default=")30000("/></Set>)' replace='\1 {{ nexus_idle_time }}\2'  backup=yes
+  when: not ansible_check_mode
+
+- name: conf nexus increment idle_time
+  replace: dest=/usr/local/nexus/etc/jetty/jetty-https.xml regexp='(.*<Set name="idleTimeout"><Property name="jetty.https.timeout" default=")30000("/></Set>)' replace='\1 {{ nexus_idle_time }}\2'  backup=yes
+  when: not ansible_check_mode
+
+- name: copy du fichier nexus.service
+  template: src=nexus.service dest=/lib/systemd/system/nexus.service owner=nexus
+  register: nexus_service_installed
+
+- name: check for java cacerts
+  stat: path=/etc/pki/java/cacerts
+  register: ca_file_exists
+
+- name: copie cacerts to /usr/local/nexus/cacerts
+  copy: src=/etc/pki/java/cacerts dest=/usr/local/nexus/cacerts remote_src=True
+  when: ca_file_exists.stat.exists and not ansible_check_mode
+
+- name: reload systemd
+  shell: systemctl daemon-reload
+  notify: Reload systemd 'nexus'
+  when: ( not ansible_check_mode ) and not docker and nexus_service_installed|changed
+
+- name: check data dir exists
+  stat: path={{ nexus_data_dir }}/data
+  register: nexus_data_dir_exists
+
+- name: force clear cache
+  file: path={{ nexus_data_dir }}/data/clean_cache state=touch owner=nexus
+  when: not docker and nexus_data_dir_exists.stat.exists
+
+- name: restart nexus after install
+  service: name=nexus state=restarted
+  when: ( not ansible_check_mode ) and not docker and nexus_service_installed
+
+- name: start nexus
+  service: name=nexus state=started enabled=yes
+  when: ( not ansible_check_mode ) and not docker
+
+- meta: flush_handlers

@@ -1,0 +1,11 @@
+---
+use_http_proxy: no
+http_proxy: ""
+https_proxy: ""
+nexus_url: https://sonatype-download.global.ssl.fastly.net/nexus/3/
+nexus_pkg: nexus-3.3.0-01
+nexus_data_dir: /opt/nexus/data
+nexus_url_prefix: "/"
+nexus_idle_time: 300000
+nexus_vm_xms: "1200M"
+nexus_vm_xmx: "1200M"

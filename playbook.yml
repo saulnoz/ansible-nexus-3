@@ -1,0 +1,5 @@
+- name: Install nexus
+  hosts: nexus
+  become: yes
+  roles:
+    - install_nexus

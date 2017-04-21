@@ -1,0 +1,14 @@
+---
+- name: Reload systemd 'nexus'
+  shell: systemctl daemon-reload
+  when: not ansible_check_mode
+  notify: Restart Service 'nexus'
+
+- name: Restart Service 'nexus'
+  service:
+    name: nexus
+    state: restarted
+  # This is a little hack to run more than one task in a handler.
+  # Reference: http://stackoverflow.com/a/31618968/1851299
+  become: true
+  when: not ansible_check_mode

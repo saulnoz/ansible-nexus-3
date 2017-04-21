@@ -1,0 +1,14 @@
+[Unit]
+Description=Service nexus 3
+After=syslog.target network.target
+
+[Service]
+Type=simple
+User=nexus
+ExecStart=/usr/local/nexus/bin/nexus run
+ExecStop=/usr/local/nexus/bin/nexus stop
+Restart=on-abort
+
+[Install]
+WantedBy=multi-user.target
+

@@ -1,0 +1,3 @@
+use_http_proxy: no
+nexus_vm_xms: "900M"
+nexus_vm_xmx: "900M"

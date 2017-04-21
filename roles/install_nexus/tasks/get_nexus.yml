@@ -1,0 +1,28 @@
+---
+- name: check for nexus dir
+  stat: path=/usr/local/{{ nexus_pkg }}
+  register: nexus_dir_exists
+
+- name: ensure nexus user exist
+  action: user name=nexus state=present
+
+- debug: msg="/tmp/{{ nexus_pkg }}-unix.tar.gz"
+
+- name: check for nexus archive
+  stat: path="/tmp/{{ nexus_pkg }}.tar.gz"
+  register: nexus_archive_exists
+
+- name: telecharger nexus @ {{ nexus_url }}/{{ nexus_pkg }}-unix.tar.gz
+  get_url: url="{{ nexus_url }}/{{ nexus_pkg }}-unix.tar.gz dest=/usr/local/{{ nexus_pkg }}.tar.gz" owner=nexus use_proxy={{ use_http_proxy }} validate_certs=no dest=/tmp
+  when: not nexus_dir_exists.stat.exists and not nexus_archive_exists.stat.exists
+  environment:
+    http_proxy: "{{ http_proxy }}"
+    https_proxy: "{{ https_proxy }}"
+
+#- name: copy sha to dest
+#  copy: src={{ nexus_pkg }}-unix.tar.gz.sha1 dest=/usr/local/{{ nexus_pkg }}.tar.gz.sha1
+#  when: not nexus_dir_exists.stat.exists
+#
+#- name: verification du sha du fichier téléchargé
+#  shell: cd /usr/local/ && sha1sum -c {{ nexus_pkg }}.tar.gz.sha1
+#  when: not nexus_dir_exists.stat.exists
